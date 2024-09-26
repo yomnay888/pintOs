@@ -3,4 +3,8 @@
 
 void syscall_init (void);
 
+void check_valid_address(const void* pt);   // Check if the address is valid.
+
+void exit(int status);
+
 #endif /* userprog/syscall.h */
