@@ -7,12 +7,13 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
-/* See [8254] for hardware details of the 8254 timer chip. */
+#include "threads/FixedPoint.h" 
+// #include "threads/FixedPoint.c" 
+/* See [8254] for hardware detai/ls of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
 #error 8254 timer requires TIMER_FREQ >= 19
-#endif
+ #endif
 #if TIMER_FREQ > 1000
 #error TIMER_FREQ <= 1000 recommended
 #endif
@@ -44,7 +45,7 @@ void
 timer_calibrate (void) 
 {
   unsigned high_bit, test_bit;
-
+  
   ASSERT (intr_get_level () == INTR_ON);
   printf ("Calibrating timer...  ");
 
@@ -62,6 +63,7 @@ timer_calibrate (void)
   for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
     if (!too_many_loops (loops_per_tick | test_bit))
       loops_per_tick |= test_bit;
+
 
   printf ("%'"PRIu64" loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
 }
@@ -90,10 +92,11 @@ void
 timer_sleep (int64_t ticks) 
 {
   int64_t start = timer_ticks ();
-
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  
+  if(timer_elapsed(start) < ticks)
+    make_thread_sleep(start + ticks);
+    
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -167,11 +170,29 @@ timer_print_stats (void)
 }
 
 /* Timer interrupt handler. */
+
+
+//////// edited
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  enum intr_level old_level = intr_disable ();
+  if( thread_mlfqs ){
+    if (thread_current() != get_idle_thread())
+      thread_current()-> recent_cpu = fixed_add( thread_current() -> recent_cpu, int_to_fixed(1) );
+      
+    if( ticks % TIMER_FREQ == 0){
+      update_load_avg();
+      thread_foreach(thread_update_recent_cpu, NULL);
+    }
+    if( ticks % 4 == 0 ){
+      thread_foreach(thread_update_priority, NULL);
+    }
+  }
+  make_possible_threads_wakeup(ticks);
+  intr_set_level (old_level);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -183,6 +204,7 @@ too_many_loops (unsigned loops)
   int64_t start = ticks;
   while (ticks == start)
     barrier ();
+
 
   /* Run LOOPS loops. */
   start = ticks;

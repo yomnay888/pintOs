@@ -99,4 +99,3 @@ pass (void)
 {
   printf ("(%s) PASS\n", test_name);
 }
-
